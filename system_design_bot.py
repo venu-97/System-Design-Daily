@@ -1,16 +1,16 @@
-"""Daily system design lesson: asks an LLM (via OpenRouter) for the next concept and emails it.
+"""Daily system design lesson: emails the next topic from curriculum.py, written up by an LLM.
 
-Nothing is hardcoded: each day the model is told which day of the 4-month (120-day) plan it is,
-which level that day falls in, and every topic already covered, and it picks the next topic
-itself. Days 1-30 Easy, 31-60 Medium, 61-90 Hard, 91-120 big-company architecture breakdowns
-(Netflix, Amazon, Instagram, Paytm, PhonePe...). Every lesson includes a hands-on lab.
+Topics come from the fixed 120-day list in curriculum.py (Easy, Medium, Hard, then big-tech
+architecture breakdowns), one per day, in order. The model (via OpenRouter) writes the full
+lesson for that day's topic. If the API key is missing or the call fails (for example, out of
+credits), the email still goes out with the topic, what to cover and the hands-on lab.
 
 Usage:
-    python system_design_bot.py            # generate today's lesson and email it
-    python system_design_bot.py --dry-run  # generate, save lesson_preview.html, don't email or save progress
+    python system_design_bot.py            # build today's lesson and email it
+    python system_design_bot.py --dry-run  # build, save lesson_preview.html, don't email or save progress
 
 Environment variables:
-    OPENROUTER_API_KEY  OpenRouter API key (required)
+    OPENROUTER_API_KEY  Optional. Without it, emails contain the topic outline only.
     OPENROUTER_MODEL    Optional, defaults to anthropic/claude-sonnet-5.5
     EMAIL_ADDRESS       Gmail address that sends the lesson (required unless --dry-run)
     EMAIL_APP_PASSWORD  Gmail app password (required unless --dry-run)
@@ -33,47 +33,25 @@ from pathlib import Path
 import markdown
 import requests
 
+from curriculum import CURRICULUM, LEVELS
+
 HERE = Path(__file__).parent
 PROGRESS_FILE = HERE / "system_design_progress.json"
 PREVIEW_FILE = HERE / "lesson_preview.html"
 IST = timezone(timedelta(hours=5, minutes=30))
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "anthropic/claude-sonnet-5.5"
-TOTAL_DAYS = 120  # 4 months
-
-# The plan's levels. These describe difficulty and format only; there is no topic list.
-# Each day the model picks the concept itself, based on the level and what's been covered.
-STAGES = [
-    (1, 30, "Easy", "concept",
-     "Beginner-to-intermediate system design. Pick the fundamental concepts a system designer must "
-     "know cold before anything else, ordered so each builds on the previous ones. Explain from "
-     "first principles at the depth a senior engineer expects. Labs are small and run on a laptop."),
-    (31, 60, "Medium", "concept",
-     "Intermediate system design. Concepts that come up in most real designs and interviews, where "
-     "the challenge is choosing between options and understanding their trade-offs under load. "
-     "Labs combine two or three components (for example with Docker Compose) and measure behaviour."),
-    (61, 90, "Hard", "concept",
-     "Advanced distributed systems and large-scale design. Concepts behind correctness, consistency, "
-     "failure handling and global scale, plus complete end-to-end designs of the kind asked in "
-     "senior/staff interviews. Labs simulate failures, concurrency and scale, not just happy paths."),
-    (91, 120, "Big Tech Architecture Breakdowns", "company",
-     "Each day, break down how one real company built one part of its system, using what that "
-     "company has published (engineering blogs, conference talks, papers). Cover both global "
-     "companies (for example Netflix, Amazon, Instagram, Uber, WhatsApp, Google, Discord) and Indian "
-     "ones (for example Paytm, PhonePe, Flipkart, Swiggy, Zomato, Razorpay, Hotstar, UPI/NPCI). "
-     "Alternate between global and Indian companies, choose a different company or a different "
-     "part of a company each day, and connect every decision to concepts from earlier stages."),
-]
-AFTER_PLAN = ("Mastery & Revision", "company",
-              "The 4-month plan is complete. Alternate between more company architecture breakdowns "
-              "and mock interview problems that combine several earlier concepts. Stay at expert level.")
+TOTAL_DAYS = len(CURRICULUM)
 
 
-def stage_for(day):
-    for start, end, name, kind, guide in STAGES:
-        if start <= day <= end:
-            return name, kind, guide
-    return AFTER_PLAN
+def topic_for(day):
+    """Return (title, cover, lab, level). After the last day, the list repeats as revision."""
+    index = (day - 1) % TOTAL_DAYS
+    title, cover, lab = CURRICULUM[index]
+    level = next((name for start, end, name in LEVELS if start <= index + 1 <= end), "")
+    if day > TOTAL_DAYS:
+        level = f"Revision · {level}"
+    return title, cover, lab, level
 
 
 # ---------- progress ----------
@@ -104,8 +82,7 @@ CONCEPT_SECTIONS = """## Why it matters
 ## Hands-on lab
 (a real, runnable exercise taking 45-90 minutes: prerequisites, step-by-step commands, complete
 code (Python, Go or Java, plus Docker/Docker Compose where useful), what to observe or measure,
-and the expected result. It must actually demonstrate the concept, e.g. break something and watch
-the system react. End with one stretch goal.)
+and the expected result. It must actually demonstrate the concept. End with one stretch goal.)
 ## Interview angle
 (how this comes up in a system design interview, what a strong answer includes, 2-3 likely follow-up questions)
 ## Key takeaways
@@ -116,7 +93,7 @@ COMPANY_SECTIONS = """## The problem they faced
 ## Architecture overview
 (an ASCII diagram in a code block of the main components and data flow)
 ## Key design decisions
-(each decision, the alternatives they rejected, and why; link each to an earlier concept)
+(each decision, the alternatives they rejected, and why; link each to a system design concept)
 ## Data and storage
 (databases, data models, partitioning, caching)
 ## Handling scale and failure
@@ -124,55 +101,42 @@ COMPANY_SECTIONS = """## The problem they faced
 ## What changed over time
 (how the architecture evolved and what they learned)
 ## Hands-on lab: build a mini version
-(a real, runnable 60-120 minute exercise that rebuilds the most interesting piece at small scale:
-step-by-step commands and complete code (Python, Go or Java, plus Docker Compose), what to
-observe, and a stretch goal)
+(a real, runnable 60-120 minute exercise: step-by-step commands and complete code (Python, Go or
+Java, plus Docker Compose), what to observe, and a stretch goal)
 ## If you were asked to design this in an interview
 (how to structure the answer and 2-3 likely follow-up questions)
 ## Key takeaways
 (3-5 bullets)"""
 
 
-def build_prompt(day, progress):
-    stage, kind, guide = stage_for(day)
-    covered = "\n".join(f"- Day {p['day']}: {p['topic']}" for p in progress) or "(none yet, this is day 1)"
-    if kind == "company":
-        task = ("Choose today's company and the specific part of its architecture to break down. "
-                "Only state facts the company has published; if you are inferring something, say so. "
-                "Use a topic title like \"<Company>: <what is being broken down>\".")
-        sections = COMPANY_SECTIONS
-    else:
-        task = ("Choose the single best next concept for today. It must fit the current level, follow "
-                "logically from what has been covered, and be slightly harder than recent days. Do not "
-                "jump ahead to a later level.")
-        sections = CONCEPT_SECTIONS
-    return f"""You are a staff engineer mentoring a senior software developer who wants an overall grip on system design in 4 months ({TOTAL_DAYS} days), one lesson per day: strong enough to pass senior/staff interviews and design real systems at work, with real hands-on experience, not just theory.
+def build_prompt(day):
+    title, cover, lab, level = topic_for(day)
+    is_company = "Big Tech" in level
+    sections = COMPANY_SECTIONS if is_company else CONCEPT_SECTIONS
+    accuracy = ("Only state facts the company has published (engineering blogs, talks, papers); "
+                "if you are inferring something, say so.\n\n") if is_company else ""
+    return f"""You are a staff engineer mentoring a senior software developer who is getting an overall grip on system design in 4 months, one lesson per day, with real hands-on practice. They want to pass senior/staff interviews and design real systems at work.
 
-The plan: days 1-30 Easy, 31-60 Medium, 61-90 Hard, 91-120 breakdowns of real big-company architectures.
-Today is day {day} of {TOTAL_DAYS}. Current level: {stage}.
-Level guidance: {guide}
+Today is day {day}. Level: {level}.
+Today's topic: {title}
+Cover: {cover}
+Hands-on lab idea (improve on it if useful): {lab}
 
-Topics already covered (do not repeat them; you may build on them):
-{covered}
-
-{task}
-
-Then write today's lesson in Markdown, about 1500-2200 words including code, with these sections:
+{accuracy}Write today's lesson in Markdown, about 1500-2200 words including code, with these sections:
 {sections}
 
-Write the first line exactly as:
-TOPIC: <short topic title>
-then a blank line, then the Markdown lesson. Do not add anything before the TOPIC line."""
+Start directly with the first section heading. Do not repeat the topic title."""
 
 
-def generate_lesson(day, progress):
+def generate_lesson(day):
+    """Return (lesson_markdown, model), or (None, reason) if the AI lesson isn't available."""
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
-        sys.exit("OPENROUTER_API_KEY must be set.")
+        return None, "OPENROUTER_API_KEY is not set"
     model = os.environ.get("OPENROUTER_MODEL") or DEFAULT_MODEL
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": build_prompt(day, progress)}],
+        "messages": [{"role": "user", "content": build_prompt(day)}],
         "max_tokens": 10000,
         "temperature": 0.7,
     }
@@ -188,37 +152,45 @@ def generate_lesson(day, progress):
             resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=300)
             if resp.status_code in (401, 402, 403):
                 # Bad key or out of credits: retrying won't help.
-                sys.exit(f"OpenRouter refused the request (HTTP {resp.status_code}). Check the API key "
-                         f"and add credits or raise the key's limit at https://openrouter.ai/settings/credits\n"
-                         f"{resp.text[:300]}")
+                msg = f"OpenRouter refused the request (HTTP {resp.status_code}): {resp.text[:300]}"
+                print(msg)
+                return None, msg
             if resp.status_code != 200:
                 raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:300]}")
             choice = resp.json()["choices"][0]
             if choice.get("finish_reason") == "length":
                 raise RuntimeError("lesson was cut off at max_tokens")
-            text = choice["message"]["content"] or ""
-            match = re.search(r"^\s*\**TOPIC:\**\s*(.+)$", text, re.MULTILINE)
-            if not match:
-                raise RuntimeError("response had no TOPIC line")
-            topic = match.group(1).strip().strip("*").strip()
-            body = text[match.end():].strip()
-            if len(body) < 500:
+            text = (choice["message"]["content"] or "").strip()
+            if len(text) < 1000:
                 raise RuntimeError("lesson was too short")
-            return topic, body, model
+            return text, model
         except Exception as exc:  # network errors, API errors, malformed responses
             last_error = exc
             print(f"Attempt {attempt} failed: {exc}")
             time.sleep(10 * attempt)
-    sys.exit(f"Could not generate lesson: {last_error}")
+    return None, f"could not generate lesson: {last_error}"
+
+
+def outline_lesson(day, reason):
+    """Lesson used when the AI write-up isn't available: the curriculum entry itself."""
+    _, cover, lab, _ = topic_for(day)
+    return (f"## What to cover today\n{cover}\n\n"
+            f"## Hands-on lab\n{lab}\n\n"
+            f"## How to study it\n"
+            f"1. Read about each point above (official docs, engineering blogs, *Designing Data-Intensive "
+            f"Applications*, *System Design Interview* by Alex Xu).\n"
+            f"2. Draw the architecture yourself before looking at any diagram.\n"
+            f"3. Do the lab and write down what surprised you.\n"
+            f"4. Explain the topic out loud in 5 minutes as if in an interview.\n\n"
+            f"> The full AI-written lesson wasn't available today ({reason[:200]}).")
 
 
 # ---------- rendering ----------
 
-def render(day, topic, lesson_md, model):
-    stage = stage_for(day)[0]
+def render(day, title, level, lesson_md, footer):
     today = datetime.now(IST).strftime("%A, %d %B %Y")
     progress_pct = min(100, round(day / TOTAL_DAYS * 100))
-    day_label = f"Day {day} of {TOTAL_DAYS}" if day <= TOTAL_DAYS else f"Day {day} (bonus)"
+    day_label = f"Day {day} of {TOTAL_DAYS}" if day <= TOTAL_DAYS else f"Day {day}"
     body = markdown.markdown(lesson_md, extensions=["fenced_code", "tables"])
 
     # Gmail ignores <style> blocks in many cases, so add inline styles.
@@ -241,14 +213,14 @@ def render(day, topic, lesson_md, model):
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>System Design Daily</title></head>
 <body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1f2328;">
 <div style="max-width:700px;margin:0 auto;padding:24px 16px;">
-<div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#3b6fd8;font-weight:600;">System Design Daily · {html.escape(day_label)} · {html.escape(stage)}</div>
-<h1 style="margin:6px 0 4px;font-size:24px;">{html.escape(topic)}</h1>
+<div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#3b6fd8;font-weight:600;">System Design Daily · {html.escape(day_label)} · {html.escape(level)}</div>
+<h1 style="margin:6px 0 4px;font-size:24px;">{html.escape(title)}</h1>
 <div style="color:#656d76;font-size:14px;margin-bottom:12px;">{today}</div>
 <div style="background:#d0d7de;border-radius:4px;height:8px;margin-bottom:22px;"><div style="background:#3b6fd8;border-radius:4px;height:8px;width:{progress_pct}%;"></div></div>
 <div style="background:#fff;border:1px solid #d0d7de;border-radius:8px;padding:8px 20px 14px;">
 {body}
 </div>
-<p style="font-size:12px;color:#8c959f;margin-top:24px;">Generated by {html.escape(model)} via OpenRouter. Sent by your System Design Daily bot.</p>
+<p style="font-size:12px;color:#8c959f;margin-top:24px;">{html.escape(footer)} Sent by your System Design Daily bot.</p>
 </div></body></html>"""
 
 
@@ -281,19 +253,25 @@ def main():
 
     progress = load_progress()
     day = len(progress) + 1
-    print(f"Generating lesson for day {day} ({stage_for(day)[0]})")
-    topic, lesson_md, model = generate_lesson(day, progress)
-    print(f"Topic: {topic}")
+    title, _, _, level = topic_for(day)
+    print(f"Day {day} ({level}): {title}")
 
-    body = render(day, topic, lesson_md, model)
-    subject = f"System Design Day {day}: {topic}"
+    lesson_md, info = generate_lesson(day)
+    if lesson_md:
+        footer = f"Lesson written by {info} via OpenRouter."
+    else:
+        print(f"Sending topic outline only: {info}")
+        lesson_md, footer = outline_lesson(day, info), "Topic outline from curriculum.py."
+
+    body = render(day, title, level, lesson_md, footer)
+    subject = f"System Design Day {day}: {title}"
 
     if args.dry_run:
         PREVIEW_FILE.write_text(body, encoding="utf-8")
         print(f"Dry run: saved {PREVIEW_FILE.name}")
         return
     send_email(body, subject)
-    save_progress(progress, day, topic)
+    save_progress(progress, day, title)
 
 
 if __name__ == "__main__":
