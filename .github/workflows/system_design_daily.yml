@@ -1,0 +1,51 @@
+name: System Design Daily
+
+on:
+  schedule:
+    - cron: "30 1 * * *"   # 01:30 UTC = 07:00 India time, every day
+  workflow_dispatch:        # adds a "Run workflow" button in the Actions tab
+
+permissions:
+  contents: write           # lets the job save system_design_progress.json so topics advance and never repeat
+
+concurrency:
+  group: system-design-daily
+  cancel-in-progress: false
+
+jobs:
+  send-lesson:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install requirements
+        run: pip install -r requirements.txt
+
+      - name: Generate and send lesson
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: python system_design_bot.py
+
+      - name: Save progress
+        run: |
+          git config user.name "system-design-bot"
+          git config user.email "system-design-bot@users.noreply.github.com"
+          git add system_design_progress.json
+          git diff --cached --quiet && exit 0
+          git commit -m "System design progress [skip ci]"
+          # The daily digest workflow may push at the same time, so retry on top of its commit.
+          for i in 1 2 3; do
+            git pull --rebase && git push && exit 0
+            sleep 5
+          done
+          exit 1
