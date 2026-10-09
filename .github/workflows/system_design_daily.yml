@@ -29,8 +29,10 @@ jobs:
 
       - name: Generate and send lesson
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          # Your OpenCode Zen key. OPENROUTER_API_KEY is still read in case the key was saved under that name.
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY || secrets.OPENROUTER_API_KEY }}
+          OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL }}
+          OPENCODE_FALLBACK_MODEL: ${{ vars.OPENCODE_FALLBACK_MODEL }}
           EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
           EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}

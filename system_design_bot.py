@@ -1,17 +1,18 @@
 """Daily system design lesson: emails the next topic from curriculum.py, written up by an LLM.
 
 Topics come from the fixed 120-day list in curriculum.py (Easy, Medium, Hard, then big-tech
-architecture breakdowns), one per day, in order. The model (via OpenRouter) writes the full
-lesson for that day's topic. If the API key is missing or the call fails (for example, out of
-credits), the email still goes out with the topic, what to cover and the hands-on lab.
+architecture breakdowns), one per day, in order. The model (via OpenCode Zen) writes the full
+lesson for that day's topic. If the main model fails (for example, out of credits), a free model
+is tried; if that fails too, the email still goes out with the topic, what to cover and the lab.
 
 Usage:
     python system_design_bot.py            # build today's lesson and email it
     python system_design_bot.py --dry-run  # build, save lesson_preview.html, don't email or save progress
 
 Environment variables:
-    OPENROUTER_API_KEY  Optional. Without it, emails contain the topic outline only.
-    OPENROUTER_MODEL    Optional, defaults to anthropic/claude-sonnet-5.5
+    OPENCODE_API_KEY         OpenCode Zen API key. Without it, emails contain the topic outline only.
+    OPENCODE_MODEL           Optional, defaults to claude-haiku-5-5 (see https://opencode.ai/docs/zen/)
+    OPENCODE_FALLBACK_MODEL  Optional, defaults to nemotron-3-ultra-free
     EMAIL_ADDRESS       Gmail address that sends the lesson (required unless --dry-run)
     EMAIL_APP_PASSWORD  Gmail app password (required unless --dry-run)
     EMAIL_TO            Recipient(s), comma separated (optional, defaults to EMAIL_ADDRESS)
@@ -39,8 +40,10 @@ HERE = Path(__file__).parent
 PROGRESS_FILE = HERE / "system_design_progress.json"
 PREVIEW_FILE = HERE / "lesson_preview.html"
 IST = timezone(timedelta(hours=5, minutes=30))
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_MODEL = "anthropic/claude-sonnet-5.5"
+ZEN_URL = "https://opencode.ai/zen/v1"
+DEFAULT_MODEL = "claude-haiku-5-5"       # about $0.003 per lesson
+FALLBACK_MODEL = "nemotron-3-ultra-free"  # free; used if the main model fails (e.g. out of credit)
+MAX_TOKENS = 10000
 TOTAL_DAYS = len(CURRICULUM)
 
 
@@ -128,47 +131,74 @@ Hands-on lab idea (improve on it if useful): {lab}
 Start directly with the first section heading. Do not repeat the topic title."""
 
 
+def call_model(model, prompt, api_key):
+    """Call one OpenCode Zen model. Returns lesson text; raises on failure.
+
+    Claude models use the Anthropic-style /messages endpoint, everything else the
+    OpenAI-style /chat/completions endpoint (see https://opencode.ai/docs/zen/).
+    """
+    if model.startswith("claude-"):
+        resp = requests.post(
+            f"{ZEN_URL}/messages",
+            headers={"x-api-key": api_key, "Authorization": f"Bearer {api_key}",
+                     "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
+            json={"model": model, "max_tokens": MAX_TOKENS,
+                  "messages": [{"role": "user", "content": prompt}]},
+            timeout=300,
+        )
+        if resp.status_code != 200:
+            raise ModelError(resp.status_code, resp.text[:300])
+        data = resp.json()
+        if data.get("stop_reason") == "max_tokens":
+            raise ModelError(None, "lesson was cut off at max_tokens")
+        text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    else:
+        resp = requests.post(
+            f"{ZEN_URL}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"model": model, "max_tokens": MAX_TOKENS,
+                  "messages": [{"role": "user", "content": prompt}]},
+            timeout=300,
+        )
+        if resp.status_code != 200:
+            raise ModelError(resp.status_code, resp.text[:300])
+        choice = resp.json()["choices"][0]
+        if choice.get("finish_reason") == "length":
+            raise ModelError(None, "lesson was cut off at max_tokens")
+        text = choice["message"].get("content") or ""
+    text = text.strip()
+    if len(text) < 1000:
+        raise ModelError(None, "lesson was too short")
+    return text
+
+
+class ModelError(Exception):
+    def __init__(self, status, message):
+        super().__init__(f"HTTP {status}: {message}" if status else message)
+        self.status = status
+
+
 def generate_lesson(day):
     """Return (lesson_markdown, model), or (None, reason) if the AI lesson isn't available."""
-    api_key = os.environ.get("OPENROUTER_API_KEY")
+    api_key = os.environ.get("OPENCODE_API_KEY")
     if not api_key:
-        return None, "OPENROUTER_API_KEY is not set"
-    model = os.environ.get("OPENROUTER_MODEL") or DEFAULT_MODEL
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": build_prompt(day)}],
-        "max_tokens": 10000,
-        "temperature": 0.7,
-    }
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "X-Title": "Daily System Design",
-    }
+        return None, "OPENCODE_API_KEY is not set"
+    prompt = build_prompt(day)
+    models = [os.environ.get("OPENCODE_MODEL") or DEFAULT_MODEL,
+              os.environ.get("OPENCODE_FALLBACK_MODEL") or FALLBACK_MODEL]
 
-    last_error = None
-    for attempt in range(1, 4):
-        try:
-            resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=300)
-            if resp.status_code in (401, 402, 403):
-                # Bad key or out of credits: retrying won't help.
-                msg = f"OpenRouter refused the request (HTTP {resp.status_code}): {resp.text[:300]}"
-                print(msg)
-                return None, msg
-            if resp.status_code != 200:
-                raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:300]}")
-            choice = resp.json()["choices"][0]
-            if choice.get("finish_reason") == "length":
-                raise RuntimeError("lesson was cut off at max_tokens")
-            text = (choice["message"]["content"] or "").strip()
-            if len(text) < 1000:
-                raise RuntimeError("lesson was too short")
-            return text, model
-        except Exception as exc:  # network errors, API errors, malformed responses
-            last_error = exc
-            print(f"Attempt {attempt} failed: {exc}")
-            time.sleep(10 * attempt)
-    return None, f"could not generate lesson: {last_error}"
+    errors = []
+    for model in dict.fromkeys(m for m in models if m):  # skip blanks and duplicates
+        for attempt in range(1, 3):
+            try:
+                return call_model(model, prompt, api_key), model
+            except Exception as exc:  # network errors, API errors, malformed responses
+                print(f"{model} attempt {attempt} failed: {exc}")
+                errors.append(f"{model}: {exc}")
+                if isinstance(exc, ModelError) and exc.status in (401, 402, 403, 404):
+                    break  # bad key, no credit or unknown model: retrying won't help
+                time.sleep(10 * attempt)
+    return None, "; ".join(errors)
 
 
 def outline_lesson(day, reason):
@@ -258,7 +288,7 @@ def main():
 
     lesson_md, info = generate_lesson(day)
     if lesson_md:
-        footer = f"Lesson written by {info} via OpenRouter."
+        footer = f"Lesson written by {info} via OpenCode Zen."
     else:
         print(f"Sending topic outline only: {info}")
         lesson_md, footer = outline_lesson(day, info), "Topic outline from curriculum.py."
