@@ -186,9 +186,17 @@ def generate_lesson(day, progress):
     for attempt in range(1, 4):
         try:
             resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=300)
+            if resp.status_code in (401, 402, 403):
+                # Bad key or out of credits: retrying won't help.
+                sys.exit(f"OpenRouter refused the request (HTTP {resp.status_code}). Check the API key "
+                         f"and add credits or raise the key's limit at https://openrouter.ai/settings/credits\n"
+                         f"{resp.text[:300]}")
             if resp.status_code != 200:
                 raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:300]}")
-            text = resp.json()["choices"][0]["message"]["content"] or ""
+            choice = resp.json()["choices"][0]
+            if choice.get("finish_reason") == "length":
+                raise RuntimeError("lesson was cut off at max_tokens")
+            text = choice["message"]["content"] or ""
             match = re.search(r"^\s*\**TOPIC:\**\s*(.+)$", text, re.MULTILINE)
             if not match:
                 raise RuntimeError("response had no TOPIC line")
