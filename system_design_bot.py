@@ -30,6 +30,7 @@ from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
+from urllib.parse import quote_plus
 
 import markdown
 import requests
@@ -50,11 +51,22 @@ TOTAL_DAYS = len(CURRICULUM)
 def topic_for(day):
     """Return (title, cover, lab, level). After the last day, the list repeats as revision."""
     index = (day - 1) % TOTAL_DAYS
-    title, cover, lab = CURRICULUM[index]
+    title, cover, lab, _ = CURRICULUM[index]
     level = next((name for start, end, name in LEVELS if start <= index + 1 <= end), "")
     if day > TOTAL_DAYS:
         level = f"Revision · {level}"
     return title, cover, lab, level
+
+
+def resources_md(day):
+    """Markdown list of the topic's curated links, plus a YouTube search for videos."""
+    title, _, _, links = CURRICULUM[(day - 1) % TOTAL_DAYS]
+    items = [f"- [{label}]({url})" for label, url in links]
+    items.append(f"- [Videos on YouTube: {title}](https://www.youtube.com/results?search_query="
+                 f"{quote_plus(title + ' system design')})")
+    items.append("- Books: *Designing Data-Intensive Applications* (Martin Kleppmann), "
+                 "*System Design Interview* Vol 1 and 2 (Alex Xu)")
+    return "## Resources\n" + "\n".join(items)
 
 
 # ---------- progress ----------
@@ -128,7 +140,8 @@ Hands-on lab idea (improve on it if useful): {lab}
 {accuracy}Write today's lesson in Markdown, about 1500-2200 words including code, with these sections:
 {sections}
 
-Start directly with the first section heading. Do not repeat the topic title."""
+Start directly with the first section heading. Do not repeat the topic title. Do not add a
+resources or further-reading section; curated links are appended separately."""
 
 
 def call_model(model, prompt, api_key):
@@ -147,7 +160,7 @@ def call_model(model, prompt, api_key):
             timeout=300,
         )
         if resp.status_code != 200:
-            raise ModelError(resp.status_code, resp.text[:300])
+            raise ModelError(resp.status_code, resp.text[:1000])
         data = resp.json()
         if data.get("stop_reason") == "max_tokens":
             raise ModelError(None, "lesson was cut off at max_tokens")
@@ -161,7 +174,7 @@ def call_model(model, prompt, api_key):
             timeout=300,
         )
         if resp.status_code != 200:
-            raise ModelError(resp.status_code, resp.text[:300])
+            raise ModelError(resp.status_code, resp.text[:1000])
         choice = resp.json()["choices"][0]
         if choice.get("finish_reason") == "length":
             raise ModelError(None, "lesson was cut off at max_tokens")
@@ -174,6 +187,10 @@ def call_model(model, prompt, api_key):
 
 class ModelError(Exception):
     def __init__(self, status, message):
+        try:  # pull the human-readable message out of a JSON error body
+            message = json.loads(message)["error"]["message"]
+        except (ValueError, KeyError, TypeError):
+            pass
         super().__init__(f"HTTP {status}: {message}" if status else message)
         self.status = status
 
@@ -212,7 +229,7 @@ def outline_lesson(day, reason):
             f"2. Draw the architecture yourself before looking at any diagram.\n"
             f"3. Do the lab and write down what surprised you.\n"
             f"4. Explain the topic out loud in 5 minutes as if in an interview.\n\n"
-            f"> The full AI-written lesson wasn't available today ({reason[:200]}).")
+            f"> The full AI-written lesson wasn't available today: {reason}")
 
 
 # ---------- rendering ----------
@@ -292,6 +309,7 @@ def main():
     else:
         print(f"Sending topic outline only: {info}")
         lesson_md, footer = outline_lesson(day, info), "Topic outline from curriculum.py."
+    lesson_md += "\n\n" + resources_md(day)
 
     body = render(day, title, level, lesson_md, footer)
     subject = f"System Design Day {day}: {title}"
