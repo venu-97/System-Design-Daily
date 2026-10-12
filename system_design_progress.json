@@ -3,5 +3,10 @@
   "day": 1,
   "date": "2026-10-11",
   "topic": "How the web works: from URL to response"
+ },
+ {
+  "day": 2,
+  "date": "2026-10-12",
+  "topic": "Latency vs throughput and the numbers every engineer should know"
  }
 ]
