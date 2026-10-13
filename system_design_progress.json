@@ -8,5 +8,10 @@
   "day": 2,
   "date": "2026-10-12",
   "topic": "Latency vs throughput and the numbers every engineer should know"
+ },
+ {
+  "day": 3,
+  "date": "2026-10-13",
+  "topic": "Back-of-the-envelope estimation"
  }
 ]
