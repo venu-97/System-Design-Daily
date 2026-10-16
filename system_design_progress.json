@@ -23,5 +23,10 @@
   "day": 5,
   "date": "2026-10-15",
   "topic": "Stateless vs stateful services"
+ },
+ {
+  "day": 6,
+  "date": "2026-10-16",
+  "topic": "Load balancing fundamentals"
  }
 ]
