@@ -28,5 +28,10 @@
   "day": 6,
   "date": "2026-10-16",
   "topic": "Load balancing fundamentals"
+ },
+ {
+  "day": 7,
+  "date": "2026-10-17",
+  "topic": "Reverse proxies and API gateways"
  }
 ]
