@@ -33,5 +33,10 @@
   "day": 7,
   "date": "2026-10-17",
   "topic": "Reverse proxies and API gateways"
+ },
+ {
+  "day": 8,
+  "date": "2026-10-18",
+  "topic": "Relational databases and ACID"
  }
 ]
