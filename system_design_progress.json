@@ -38,5 +38,10 @@
   "day": 8,
   "date": "2026-10-18",
   "topic": "Relational databases and ACID"
+ },
+ {
+  "day": 9,
+  "date": "2026-10-19",
+  "topic": "Database indexing"
  }
 ]
