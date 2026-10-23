@@ -58,5 +58,10 @@
   "day": 12,
   "date": "2026-10-22",
   "topic": "Content Delivery Networks (CDNs)"
+ },
+ {
+  "day": 13,
+  "date": "2026-10-23",
+  "topic": "HTTP caching"
  }
 ]
