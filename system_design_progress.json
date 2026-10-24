@@ -63,5 +63,10 @@
   "day": 13,
   "date": "2026-10-23",
   "topic": "HTTP caching"
+ },
+ {
+  "day": 14,
+  "date": "2026-10-24",
+  "topic": "Authentication and sessions"
  }
 ]
