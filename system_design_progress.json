@@ -68,5 +68,10 @@
   "day": 14,
   "date": "2026-10-24",
   "topic": "Authentication and sessions"
+ },
+ {
+  "day": 15,
+  "date": "2026-10-25",
+  "topic": "Storage types: block, file and object"
  }
 ]
