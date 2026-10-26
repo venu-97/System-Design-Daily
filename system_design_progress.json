@@ -73,5 +73,10 @@
   "day": 15,
   "date": "2026-10-25",
   "topic": "Storage types: block, file and object"
+ },
+ {
+  "day": 16,
+  "date": "2026-10-26",
+  "topic": "Message queues basics"
  }
 ]
