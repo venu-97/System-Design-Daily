@@ -78,5 +78,10 @@
   "day": 16,
   "date": "2026-10-26",
   "topic": "Message queues basics"
+ },
+ {
+  "day": 17,
+  "date": "2026-10-27",
+  "topic": "Pub/sub vs point-to-point messaging"
  }
 ]
