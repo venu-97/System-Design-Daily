@@ -88,5 +88,10 @@
   "day": 18,
   "date": "2026-10-28",
   "topic": "Synchronous vs asynchronous communication"
+ },
+ {
+  "day": 19,
+  "date": "2026-10-29",
+  "topic": "Real-time communication: polling, long polling, WebSockets, SSE"
  }
 ]
