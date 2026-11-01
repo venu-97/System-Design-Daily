@@ -103,5 +103,10 @@
   "day": 21,
   "date": "2026-10-31",
   "topic": "API design best practices"
+ },
+ {
+  "day": 22,
+  "date": "2026-11-01",
+  "topic": "Idempotency and safe retries"
  }
 ]
