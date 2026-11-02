@@ -108,5 +108,10 @@
   "day": 22,
   "date": "2026-11-01",
   "topic": "Idempotency and safe retries"
+ },
+ {
+  "day": 23,
+  "date": "2026-11-02",
+  "topic": "Rate limiting algorithms"
  }
 ]
