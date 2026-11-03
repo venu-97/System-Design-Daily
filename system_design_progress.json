@@ -113,5 +113,10 @@
   "day": 23,
   "date": "2026-11-02",
   "topic": "Rate limiting algorithms"
+ },
+ {
+  "day": 24,
+  "date": "2026-11-03",
+  "topic": "Monolith vs microservices"
  }
 ]
