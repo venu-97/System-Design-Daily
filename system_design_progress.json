@@ -118,5 +118,10 @@
   "day": 24,
   "date": "2026-11-03",
   "topic": "Monolith vs microservices"
+ },
+ {
+  "day": 25,
+  "date": "2026-11-04",
+  "topic": "Availability, SLAs, SLOs and the nines"
  }
 ]
