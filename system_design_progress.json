@@ -128,5 +128,10 @@
   "day": 26,
   "date": "2026-11-05",
   "topic": "Redundancy, failover and health checks"
+ },
+ {
+  "day": 27,
+  "date": "2026-11-06",
+  "topic": "Observability basics: logs, metrics and traces"
  }
 ]
