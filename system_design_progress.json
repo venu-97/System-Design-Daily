@@ -133,5 +133,10 @@
   "day": 27,
   "date": "2026-11-06",
   "topic": "Observability basics: logs, metrics and traces"
+ },
+ {
+  "day": 28,
+  "date": "2026-11-07",
+  "topic": "Database replication basics"
  }
 ]
