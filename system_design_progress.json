@@ -143,5 +143,10 @@
   "day": 29,
   "date": "2026-11-08",
   "topic": "Data serialization and encoding"
+ },
+ {
+  "day": 30,
+  "date": "2026-11-09",
+  "topic": "Design walkthrough: URL shortener"
  }
 ]
