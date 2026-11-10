@@ -148,5 +148,10 @@
   "day": 30,
   "date": "2026-11-09",
   "topic": "Design walkthrough: URL shortener"
+ },
+ {
+  "day": 31,
+  "date": "2026-11-10",
+  "topic": "Database sharding and partitioning"
  }
 ]
