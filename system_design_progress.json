@@ -153,5 +153,10 @@
   "day": 31,
   "date": "2026-11-10",
   "topic": "Database sharding and partitioning"
+ },
+ {
+  "day": 32,
+  "date": "2026-11-11",
+  "topic": "Consistent hashing"
  }
 ]
