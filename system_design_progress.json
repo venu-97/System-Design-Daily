@@ -158,5 +158,10 @@
   "day": 32,
   "date": "2026-11-11",
   "topic": "Consistent hashing"
+ },
+ {
+  "day": 33,
+  "date": "2026-11-12",
+  "topic": "Replication deep dive"
  }
 ]
