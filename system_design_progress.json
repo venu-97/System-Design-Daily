@@ -163,5 +163,10 @@
   "day": 33,
   "date": "2026-11-12",
   "topic": "Replication deep dive"
+ },
+ {
+  "day": 34,
+  "date": "2026-11-13",
+  "topic": "Advanced caching patterns"
  }
 ]
