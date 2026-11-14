@@ -168,5 +168,10 @@
   "day": 34,
   "date": "2026-11-13",
   "topic": "Advanced caching patterns"
+ },
+ {
+  "day": 35,
+  "date": "2026-11-14",
+  "topic": "Distributed caches: Redis and Memcached"
  }
 ]
