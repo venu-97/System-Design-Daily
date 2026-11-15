@@ -173,5 +173,10 @@
   "day": 35,
   "date": "2026-11-14",
   "topic": "Distributed caches: Redis and Memcached"
+ },
+ {
+  "day": 36,
+  "date": "2026-11-15",
+  "topic": "CAP theorem and PACELC"
  }
 ]
