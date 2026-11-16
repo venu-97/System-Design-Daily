@@ -178,5 +178,10 @@
   "day": 36,
   "date": "2026-11-15",
   "topic": "CAP theorem and PACELC"
+ },
+ {
+  "day": 37,
+  "date": "2026-11-16",
+  "topic": "Consistency models"
  }
 ]
