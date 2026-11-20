@@ -198,5 +198,10 @@
   "day": 40,
   "date": "2026-11-19",
   "topic": "Event-driven architecture and event sourcing"
+ },
+ {
+  "day": 41,
+  "date": "2026-11-20",
+  "topic": "CQRS"
  }
 ]
