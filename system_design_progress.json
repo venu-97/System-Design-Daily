@@ -203,5 +203,10 @@
   "day": 41,
   "date": "2026-11-20",
   "topic": "CQRS"
+ },
+ {
+  "day": 42,
+  "date": "2026-11-21",
+  "topic": "Search systems and inverted indexes"
  }
 ]
