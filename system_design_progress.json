@@ -223,5 +223,10 @@
   "day": 45,
   "date": "2026-11-24",
   "topic": "Service discovery and service mesh"
+ },
+ {
+  "day": 46,
+  "date": "2026-11-25",
+  "topic": "Resilience patterns"
  }
 ]
