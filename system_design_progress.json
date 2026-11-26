@@ -228,5 +228,10 @@
   "day": 46,
   "date": "2026-11-25",
   "topic": "Resilience patterns"
+ },
+ {
+  "day": 47,
+  "date": "2026-11-26",
+  "topic": "Batch vs stream processing"
  }
 ]
