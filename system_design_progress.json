@@ -233,5 +233,10 @@
   "day": 47,
   "date": "2026-11-26",
   "topic": "Batch vs stream processing"
+ },
+ {
+  "day": 48,
+  "date": "2026-11-27",
+  "topic": "Data pipelines and change data capture"
  }
 ]
