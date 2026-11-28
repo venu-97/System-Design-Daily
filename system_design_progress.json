@@ -238,5 +238,10 @@
   "day": 48,
   "date": "2026-11-27",
   "topic": "Data pipelines and change data capture"
+ },
+ {
+  "day": 49,
+  "date": "2026-11-28",
+  "topic": "Media upload and processing pipelines"
  }
 ]
